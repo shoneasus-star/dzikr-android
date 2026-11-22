@@ -1,0 +1,65 @@
+name: Build Dzikr APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'dzikr-play-project.zip'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Dzikr project
+        run: |
+          test -f dzikr-play-project.zip
+          unzip -q dzikr-play-project.zip
+          test -f dzikr-play/package.json
+          test -f dzikr-play/www/index.html
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install Capacitor and plugins
+        working-directory: dzikr-play
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/app @capacitor/haptics cordova-plugin-purchase
+
+      - name: Create Android project
+        working-directory: dzikr-play
+        run: npx cap add android
+
+      - name: Apply Android configuration
+        working-directory: dzikr-play
+        run: node android-config/patch-android.js
+
+      - name: Sync web app to Android
+        working-directory: dzikr-play
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: dzikr-play/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dzikr-debug-apk
+          path: dzikr-play/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
